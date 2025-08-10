@@ -53,6 +53,13 @@ class ImageProcessing(APIView):
         return Response({'status': 'error'})
 
     def image_process(self, image_file: Image, inp_settings: dict, path) -> str:
+        """Обрабатывает изображения.
+
+        :param image_file: файл изображения
+        :param inp_settings: файл с параметрами обработки изображения (request.POST)
+        :param path: путь по которому следует сохранить файл
+        :return: имя обработанного изображения
+        """
         image = Image.open(image_file)
         new_file_name = image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
 
@@ -72,16 +79,24 @@ class ImageProcessing(APIView):
         # image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
         return new_file_name
 
-    def zip_processing(self, file, inp_settings: dict, path, datetime_name_mark) -> str:
-        if inp_settings['format'].lower() == 'jpg':
+    def zip_processing(self, file, inp_settings: dict, path, datetime_name_mark) -> bool:
+        """
+        Обрабатывает изображения внутри zip-файла
+        :param file: zip-файл
+        :param inp_settings: файл с параметрами обработки изображения (request.POST)
+        :param path: путь, по которому следует сохранить zip-файл с обработанными изображениями
+        :param datetime_name_mark: тег даты-времени для формирования имени файла
+        :return: булево значение - обработка успешна (True), обработка закончилась ошибкой (False)
+        """
+        if inp_settings['format'].lower() == 'jpg': # pillow не имеет формата jpg
             inp_settings['format'] = 'jpeg'
         with ZipFile(file) as zip_file, ZipFile(
                 path, 'w') as output_zipfile:
             if [file.filename for file in zip_file.infolist() if
-                file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg'))]:
-                os.mkdir(os.path.join(settings.MEDIA_ROOT, f'download\\output_zip_images\\{datetime_name_mark}'))
+                file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg'))]: # проверяем есть ли изображения в файле
+                os.mkdir(os.path.join(settings.MEDIA_ROOT, f'download\\output_zip_images\\{datetime_name_mark}')) # создаём директорию для извлечения изображений
                 file_path_to_save = os.path.join(settings.MEDIA_ROOT,
-                                                 f'download\\output_zip_images\\{datetime_name_mark}')
+                                                 f'download\\output_zip_images\\{datetime_name_mark}') # запоминаем путь по которому следует сохранять изображения
                 for file_in_zip in zip_file.infolist():
                     if file_in_zip.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
                         with zip_file.open(file_in_zip.filename) as image_file:
@@ -89,10 +104,12 @@ class ImageProcessing(APIView):
                             if inp_settings[
                                 'format'].lower() == 'jpeg' and image.mode == 'RGBA':  # jpeg не поддерживает rgba
                                 image = image.convert('RGB')
-                            new_file_name = image_file.name.split('/')[-1].split('.')[0]
+                            new_file_name = image_file.name.split('/')[-1].split('.')[0] # извлекаем имя файла
                             image.save(os.path.join(file_path_to_save,
                                                     f'{new_file_name}.{inp_settings["format"].lower()}'),
-                                       format=inp_settings['format'])
+                                       format=inp_settings['format']) # пересохраняем с требуемым форматом
                 for output_image in os.scandir(file_path_to_save):
                     self.image_process(output_image, inp_settings, file_path_to_save)
                     output_zipfile.write(output_image.path, output_image.name)
+                return True
+        return False
