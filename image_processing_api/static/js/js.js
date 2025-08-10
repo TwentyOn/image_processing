@@ -16,7 +16,7 @@ btn.addEventListener("click", async function (e) {
   formData.append("quality", 75);
   formData.append("resolution", "true");
   formData.append("proportion", "true");
-  formData.append("toggleSwitch", "true");
+  formData.append("toggle_switch", "true");
   formData.append("high", "1200");
   formData.append("width", "600");
   formData.append("file", pic);
