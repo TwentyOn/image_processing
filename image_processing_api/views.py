@@ -1,5 +1,7 @@
+import datetime
 import os.path
 from zipfile import ZipFile
+from datetime import datetime, date
 
 from django.shortcuts import render
 from django.conf import settings
@@ -37,16 +39,15 @@ class ImageProcessing(APIView):
             if file.name.lower().endswith('.zip'):
                 self.zip_processing(request.FILES['file'])
             elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
-                new_file_name = file.name.split('.')[0] + f'.{serializer.validated_data["format"]}'
-                self.image_process(file, serializer.validated_data,
-                                   new_file_name)  # вызов функции обработки изображения
-                file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{new_file_name}'))
+                new_filename = self.image_process(file, serializer.validated_data)  # вызов функции обработки изображения
+                file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, new_filename))
                 return Response({'file_url': file_url})
                 # return FileResponse(output, filename=f'processed_{file.name}', content_type='image/WEBP')
         return Response({'status': 'error'})
 
-    def image_process(self, image_file: Image, inp_settings: dict, new_file_name):
+    def image_process(self, image_file: Image, inp_settings: dict) -> str:
         image = Image.open(image_file)
+        new_file_name = image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
 
         if not inp_settings['resolution']:  # если False то меняем разрешение
             if inp_settings['proportion']:  # если True сохраняем пропорции
@@ -61,12 +62,16 @@ class ImageProcessing(APIView):
         image.save(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'), quality=inp_settings['quality'],
                    format=inp_settings['format'].upper())  # сохраняём в качестве quality и формате format
         image.close()
-        #image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
+        # image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
+        return f'download/{new_file_name}'
 
     def zip_processing(self, file):
+        output_filename = f'output_{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}.zip'
         image_files = []
-        with ZipFile(file) as zip_file:
+        with ZipFile(file) as zip_file, ZipFile(
+                os.path.join(settings.MEDIA_ROOT, f'download\\{output_filename}'), 'w') as output_zipfile:
             for file in zip_file.infolist():
                 if file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
                     image_files.append(file.filename)
+                    zip_file.open(file.filename)
         print(image_files)
