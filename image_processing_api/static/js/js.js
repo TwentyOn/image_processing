@@ -13,10 +13,10 @@ btn.addEventListener("click", async function (e) {
 
   const formData = new FormData();
   formData.append("format", "png");
-  formData.append("quality", "75");
+  formData.append("quality", 75);
   formData.append("resolution", "true");
   formData.append("proportion", "true");
-  formData.append("toggle_switch", "true");
+  formData.append("toggleSwitch", "true");
   formData.append("high", "1200");
   formData.append("width", "600");
   formData.append("file", pic);
@@ -32,8 +32,8 @@ btn.addEventListener("click", async function (e) {
     return;
   } /* Если будет мешать, удали кусок if */
 
-  const file = await response.json(); // получаем бинарные данные
-/*
+  const blob = await response.blob(); // получаем бинарные данные
+
   // Делаем временный URL для картинки в браузере
   const objectUrl = URL.createObjectURL(blob);
   // Вставляем в <img>
@@ -41,4 +41,4 @@ btn.addEventListener("click", async function (e) {
 
   // Делаем ссылку для скачивания
   linkElem.href = objectUrl;
-});*/
+});
