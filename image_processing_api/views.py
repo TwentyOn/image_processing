@@ -35,17 +35,24 @@ class ImageProcessing(APIView):
         serializer = InputImage(data=request.data)
         if serializer.is_valid():
             file = request.FILES['file']
-            default_storage.save(file.name, ContentFile(file.read()))
+            # default_storage.save(f'upload\\{file.name}', ContentFile(file.read())) # сохранение входящего файла
             if file.name.lower().endswith('.zip'):
-                self.zip_processing(request.FILES['file'])
+                datetime_name_mark = f'{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}'
+                output_filename = f'output_{datetime_name_mark}.zip'
+                path = os.path.join(settings.MEDIA_ROOT, f'download\\{output_filename}')
+                self.zip_processing(file, serializer.validated_data, path, datetime_name_mark)
+                file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{output_filename}'))
+                return Response({'file_url': file_url})
             elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
-                new_filename = self.image_process(file, serializer.validated_data)  # вызов функции обработки изображения
-                file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, new_filename))
+                path = os.path.join(settings.MEDIA_ROOT, 'download')
+                new_filename = self.image_process(file, serializer.validated_data,
+                                                  path)  # вызов функции обработки изображения
+                file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{new_filename}'))
                 return Response({'file_url': file_url})
                 # return FileResponse(output, filename=f'processed_{file.name}', content_type='image/WEBP')
         return Response({'status': 'error'})
 
-    def image_process(self, image_file: Image, inp_settings: dict) -> str:
+    def image_process(self, image_file: Image, inp_settings: dict, path) -> str:
         image = Image.open(image_file)
         new_file_name = image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
 
@@ -59,19 +66,33 @@ class ImageProcessing(APIView):
                     image = image.resize((inp_settings['width'], int(inp_settings['width'] * aspect_ratio)))
             else:
                 image = image.resize((inp_settings['width'], inp_settings['high']))
-        image.save(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'), quality=inp_settings['quality'],
+        image.save(os.path.join(path, f'{new_file_name}'), quality=inp_settings['quality'],
                    format=inp_settings['format'].upper())  # сохраняём в качестве quality и формате format
         image.close()
         # image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
-        return f'download/{new_file_name}'
+        return new_file_name
 
-    def zip_processing(self, file):
-        output_filename = f'output_{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}.zip'
-        image_files = []
+    def zip_processing(self, file, inp_settings: dict, path, datetime_name_mark) -> str:
+        if inp_settings['format'].lower() == 'jpg':
+            inp_settings['format'] = 'jpeg'
         with ZipFile(file) as zip_file, ZipFile(
-                os.path.join(settings.MEDIA_ROOT, f'download\\{output_filename}'), 'w') as output_zipfile:
-            for file in zip_file.infolist():
-                if file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
-                    image_files.append(file.filename)
-                    zip_file.open(file.filename)
-        print(image_files)
+                path, 'w') as output_zipfile:
+            if [file.filename for file in zip_file.infolist() if
+                file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg'))]:
+                os.mkdir(os.path.join(settings.MEDIA_ROOT, f'download\\output_zip_images\\{datetime_name_mark}'))
+                file_path_to_save = os.path.join(settings.MEDIA_ROOT,
+                                                 f'download\\output_zip_images\\{datetime_name_mark}')
+                for file_in_zip in zip_file.infolist():
+                    if file_in_zip.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
+                        with zip_file.open(file_in_zip.filename) as image_file:
+                            image = Image.open(image_file)
+                            if inp_settings[
+                                'format'].lower() == 'jpeg' and image.mode == 'RGBA':  # jpeg не поддерживает rgba
+                                image = image.convert('RGB')
+                            new_file_name = image_file.name.split('/')[-1].split('.')[0]
+                            image.save(os.path.join(file_path_to_save,
+                                                    f'{new_file_name}.{inp_settings["format"].lower()}'),
+                                       format=inp_settings['format'])
+                for output_image in os.scandir(file_path_to_save):
+                    self.image_process(output_image, inp_settings, file_path_to_save)
+                    output_zipfile.write(output_image.path, output_image.name)
