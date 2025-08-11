@@ -33,7 +33,7 @@ class ImageProcessing(APIView):
 
     def post(self, request):
         serializer = InputImage(data=request.data)
-        #start_time = perf_counter()
+        # start_time = perf_counter()
         if serializer.is_valid():
             file = request.FILES['file']
             # default_storage.save(f'upload\\{file.name}', ContentFile(file.read())) # сохранение входящего файла
@@ -43,8 +43,9 @@ class ImageProcessing(APIView):
                 output_zip_filename = f'output_{datetime_name_mark}.zip'
                 path = os.path.join(settings.MEDIA_ROOT, f'download\\{output_zip_filename}')
                 if self.zip_processing(file, serializer.validated_data, path, datetime_name_mark):
-                    file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{output_zip_filename}'))
-                    #print(perf_counter() - start_time)
+                    file_url = request.build_absolute_uri(
+                        os.path.join(settings.MEDIA_URL, f'download/{output_zip_filename}'))
+                    # print(perf_counter() - start_time)
                     return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url})
             # если изображение вызываем метод image_process
             elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
@@ -52,7 +53,7 @@ class ImageProcessing(APIView):
                 new_filename = self.image_process(file, serializer.validated_data,
                                                   path)  # вызов функции обработки изображения
                 file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{new_filename}'))
-                #print(perf_counter() - start_time)
+                # print(perf_counter() - start_time)
                 return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url})
                 # return FileResponse(output, filename=f'processed_{file.name}', content_type='image/WEBP')
         return Response({'status_code': status.HTTP_400_BAD_REQUEST, 'message': 'Неверные параметры запроса'})
@@ -66,20 +67,29 @@ class ImageProcessing(APIView):
         :return: имя обработанного изображения
         """
         image = Image.open(image_file)
-        new_file_name = image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
 
         if not inp_settings['resolution']:  # если False то меняем разрешение
             if inp_settings['proportion']:  # если True сохраняем пропорции
                 width, high = image.size
                 aspect_ratio = width / high  # считаем соотношение сторон
-                if not inp_settings['toggle_switch']:  # если False редактируется высота
+                # если False редактируется высота
+                if not inp_settings['toggle_switch']:
                     image = image.resize((int(inp_settings['high'] / aspect_ratio), inp_settings['high']))
-                else:  # если True редактируется ширина
+                # если True редактируется ширина
+                else:
                     image = image.resize((inp_settings['width'], int(inp_settings['width'] * aspect_ratio)))
             else:
                 image = image.resize((inp_settings['width'], inp_settings['high']))
-        image.save(os.path.join(path, f'{new_file_name}'), quality=inp_settings['quality'],
-                   format=inp_settings['format'].upper())  # сохраняём в качестве quality и формате format
+        # если меняем формат
+        if inp_settings['format']:
+            # сохраняём в качестве quality и формате format
+            new_file_name = image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
+            image.save(os.path.join(path, f'{new_file_name}'), quality=inp_settings['quality'],
+                       format=inp_settings['format'].upper())
+        # если формат оставить исходным
+        else:
+            image.save(os.path.join(path, image_file.name), quality=inp_settings['quality'],
+                       format=inp_settings['format'].upper())
         image.close()
         # image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
         return new_file_name
@@ -106,7 +116,7 @@ class ImageProcessing(APIView):
                 os.mkdir(os.path.join(settings.MEDIA_ROOT,
                                       f'download\\output_zip_images\\{datetime_name_mark}'))  # создаём директорию для извлечения изображений
                 dir_path_to_save = os.path.join(settings.MEDIA_ROOT,
-                                                 f'download\\output_zip_images\\{datetime_name_mark}')  # запоминаем путь по которому следует сохранять изображения
+                                                f'download\\output_zip_images\\{datetime_name_mark}')  # запоминаем путь по которому следует сохранять изображения
                 for file_in_zip in zip_file.infolist():
                     if file_in_zip.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
                         with zip_file.open(file_in_zip.filename) as image_file:
