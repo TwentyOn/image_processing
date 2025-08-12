@@ -10,7 +10,8 @@ from django.core.files.storage import default_storage
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, exceptions
+from rest_framework.exceptions import APIException
+from rest_framework import status
 from django.http import HttpResponse, FileResponse
 from django.conf.urls.static import static
 
@@ -35,11 +36,14 @@ class ImageProcessing(APIView):
         serializer = InputImage(data=request.data)
         # start_time = perf_counter()
         if serializer.is_valid():
-            file = request.FILES['file']
+            try:
+                file = request.FILES['file']
+            except:
+                pass
             # default_storage.save(f'upload\\{file.name}', ContentFile(file.read())) # сохранение входящего файла
             # если zip файл вызываем метод zip_processing
             if file.name.lower().endswith('.zip'):
-                datetime_name_mark = f'{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}'
+                datetime_name_mark = f'{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}-{datetime.today().microsecond}'
                 output_zip_filename = f'output_{datetime_name_mark}.zip'
                 path = os.path.join(settings.MEDIA_ROOT, f'download\\{output_zip_filename}')
                 if self.zip_processing(file, serializer.validated_data, path, datetime_name_mark):
@@ -56,6 +60,7 @@ class ImageProcessing(APIView):
                 # print(perf_counter() - start_time)
                 return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url})
                 # return FileResponse(output, filename=f'processed_{file.name}', content_type='image/WEBP')
+        print(serializer.errors)
         return Response({'status_code': status.HTTP_400_BAD_REQUEST, 'message': 'Неверные параметры запроса'})
 
     def image_process(self, image_file: Image, inp_settings: dict, path) -> str:
@@ -83,7 +88,8 @@ class ImageProcessing(APIView):
         # если меняем формат
         if inp_settings['format']:
             # сохраняём в качестве quality и формате format
-            new_file_name = image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
+            datetime_name_mark = f'{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}-{datetime.today().microsecond}'
+            new_file_name = datetime_name_mark + image_file.name.split('.')[0] + f'.{inp_settings["format"]}'
             image.save(os.path.join(path, f'{new_file_name}'), quality=inp_settings['quality'],
                        format=inp_settings['format'].upper())
         # если формат оставить исходным
@@ -92,7 +98,7 @@ class ImageProcessing(APIView):
                        format=inp_settings['format'].upper())
         image.close()
         # image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
-        return new_file_name
+        return f'{datetime_name_mark}+{new_file_name}'
 
     def zip_processing(self, file, inp_settings: dict, path, datetime_name_mark) -> bool:
         """
