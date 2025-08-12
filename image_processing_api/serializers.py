@@ -20,5 +20,5 @@ class InputImage(serializers.Serializer):
     resolution = serializers.BooleanField()
     proportion = serializers.BooleanField()
     toggle_switch = serializers.BooleanField()
-    high = serializers.IntegerField()
-    width = serializers.IntegerField()
+    high = serializers.IntegerField(required=False)
+    width = serializers.IntegerField(required=False)
