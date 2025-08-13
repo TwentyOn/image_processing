@@ -90,14 +90,20 @@ class ImageProcessing(APIView):
                 image = Image.open(png_buffer)
             # иначе сохраняем без изменений
             else:
-                cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, datetime_name_mark + image_file.name))
+                if tag == 'zip':
+                    cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, file_name))
+                else:
+                    cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, datetime_name_mark + file_name))
                 return image_file.name
         elif image_file.name.lower().endswith('.eps'):
             if not inp_settings['vector']:
                 image = Image.open(image_file)
             else:
-                # сохраняём файл из локального хранилища без изменений
-                default_storage.save(os.path.join(path, datetime_name_mark + image_file.name), image_file)
+                if tag == 'zip':
+                    default_storage.save(os.path.join(path, image_file.name), image_file)
+                else:
+                    # сохраняём файл из локального хранилища без изменений
+                    default_storage.save(os.path.join(path, datetime_name_mark + image_file.name), image_file)
                 return image_file.name
         else:
             image = Image.open(image_file)
