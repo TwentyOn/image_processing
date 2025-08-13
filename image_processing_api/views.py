@@ -4,6 +4,7 @@ from zipfile import ZipFile
 from datetime import datetime, date
 from time import perf_counter
 
+import cairosvg
 from django.shortcuts import render
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -50,7 +51,7 @@ class ImageProcessing(APIView):
                     # print(perf_counter() - start_time)
                     return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url})
             # если изображение вызываем метод image_process
-            elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
+            elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.eps', '.svg')):
                 path = os.path.join(settings.MEDIA_ROOT, 'download')
                 new_filename = f"{datetime_name_mark}{self.image_process(file, serializer.validated_data, path, 'single_image', datetime_name_mark)}"  # вызов функции обработки изображения
                 file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{new_filename}'))
@@ -68,26 +69,45 @@ class ImageProcessing(APIView):
         :param tag: тег для формирования имени файла, если zip то без временной метки, иначе с ней
         :return: имя обработанного изображения
         """
-        # если параметр vector False конвертируем формат
-        if image_file.name.lower().endswith('.svg') and not inp_settings['vector']:
-            png_data = svg2png(file_obj=image_file)
-            png_buffer = io.BytesIO(png_data)
-            image = Image.open(png_buffer)
-        elif image_file.name.lower().endswith('.eps') and not inp_settings['vector']:
-            pass
+        # если получен файл зип, осталвляем только имя файла
+        if '/' in image_file.name:
+            file_name = image_file.name.split('/')[-1]
+        else:
+            file_name = image_file.name
+        # если меняем формат
+        if inp_settings['format']:
+            # сохраняём в качестве quality и формате format
+            new_file_name = file_name.split('.')[0] + f'.{inp_settings["format"]}'
+        # если формат оставить исходным
+        else:
+            new_file_name = file_name
+
+        if image_file.name.lower().endswith('.svg'):
+            # если параметр vector False конвертируем в формат для обработки библиотекой pillow
+            if not inp_settings['vector']:
+                png_data = svg2png(file_obj=image_file)
+                png_buffer = io.BytesIO(png_data)
+                image = Image.open(png_buffer)
+            # иначе сохраняем без изменений
+            else:
+                cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, datetime_name_mark + image_file.name))
+                return image_file.name
+        elif image_file.name.lower().endswith('.eps'):
+            if not inp_settings['vector']:
+                image = Image.open(image_file)
+            else:
+                # сохраняём файл из локального хранилища без изменений
+                default_storage.save(os.path.join(path, datetime_name_mark + image_file.name), image_file)
+                return image_file.name
         else:
             image = Image.open(image_file)
+
         # pillow не имеет формата jpg, меняем строку на jpeg
         if inp_settings['format'].lower() == 'jpg':
             inp_settings['format'] = 'jpeg'
         # jpeg не поддерживает RGBA режим
         if image.mode == 'RGBA' and inp_settings['format'] == 'jpeg':
             image = image.convert('RGB')
-        # если получен файл зип, осталвляем только имя файла
-        if '/' in image_file.name:
-            file_name = image_file.name.split('/')[-1]
-        else:
-            file_name = image_file.name
 
         if not inp_settings['resolution']:  # если False то меняем разрешение
             if inp_settings['proportion']:  # если True сохраняем пропорции
@@ -101,13 +121,6 @@ class ImageProcessing(APIView):
                     image = image.resize((inp_settings['width'], int(inp_settings['width'] / aspect_ratio)))
             else:
                 image = image.resize((inp_settings['width'], inp_settings['high']))
-        # если меняем формат
-        if inp_settings['format']:
-            # сохраняём в качестве quality и формате format
-            new_file_name = file_name.split('.')[0] + f'.{inp_settings["format"]}'
-        # если формат оставить исходным
-        else:
-            new_file_name = file_name
         if tag == 'zip':
             image.save(os.path.join(path, new_file_name), quality=inp_settings['quality'],
                        format=inp_settings['format'].upper())
