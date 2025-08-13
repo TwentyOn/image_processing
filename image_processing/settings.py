@@ -38,7 +38,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'image_processing_api.apps.ImageProcessingApiConfig',
     'rest_framework',
-    'corsheaders'
 ]
 
 REST_FRAMEWORK = {
