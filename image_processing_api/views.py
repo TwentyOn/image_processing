@@ -74,6 +74,7 @@ class ImageProcessing(APIView):
             file_name = image_file.name.split('/')[-1]
         else:
             file_name = image_file.name
+        # формирование имени файла
         # если меняем формат
         if inp_settings['format']:
             # сохраняём в качестве quality и формате format
@@ -121,12 +122,12 @@ class ImageProcessing(APIView):
                 aspect_ratio = width / high  # считаем соотношение сторон
                 # если False редактируется высота
                 if not inp_settings['toggle_switch']:
-                    image = image.resize((int(inp_settings['high'] * aspect_ratio), inp_settings['high']))
+                    image = image.resize((int(inp_settings['height'] * aspect_ratio), inp_settings['height']))
                 # если True редактируется ширина
                 else:
                     image = image.resize((inp_settings['width'], int(inp_settings['width'] / aspect_ratio)))
             else:
-                image = image.resize((inp_settings['width'], inp_settings['high']))
+                image = image.resize((inp_settings['width'], inp_settings['height']))
         if tag == 'zip':
             image.save(os.path.join(path, new_file_name), quality=inp_settings['quality'],
                        format=inp_settings['format'].upper())
