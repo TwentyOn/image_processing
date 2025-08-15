@@ -3,6 +3,8 @@ import os
 from zipfile import ZipFile
 from datetime import datetime, date
 from time import perf_counter
+import subprocess
+import tempfile
 
 import cairosvg
 from django.shortcuts import render
@@ -51,7 +53,7 @@ class ImageProcessing(APIView):
                     # print(perf_counter() - start_time)
                     return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url})
             # если изображение вызываем метод image_process
-            elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.eps', '.svg')):
+            elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.eps', '.svg', 'ai')):
                 path = os.path.join(settings.MEDIA_ROOT, 'download')
                 new_filename = f"{datetime_name_mark}{self.image_process(file, serializer.validated_data, path, 'single_image', datetime_name_mark)}"  # вызов функции обработки изображения
                 file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL, f'download/{new_filename}'))
@@ -70,15 +72,23 @@ class ImageProcessing(APIView):
         :return: имя обработанного изображения
         """
         # если получен файл зип, осталвляем только имя файла
-        if '/' in image_file.name:
-            file_name = image_file.name.split('/')[-1]
-        else:
-            file_name = image_file.name
+        file_name = image_file.name
         # формирование имени файла
         # если меняем формат
         if inp_settings['format']:
-            # сохраняём в качестве quality и формате format
-            new_file_name = file_name.split('.')[0] + f'.{inp_settings["format"]}'
+            if tag == 'single_file':
+                # имя файла и формате "format"
+                new_file_name = file_name.split('.')[0] + f'.{inp_settings["format"]}'
+            # если zip-файл
+            else:
+                if image_file.name.endswith('.svg'):
+                    # проверяем, требуется ли преобразовать svg в растровый тип
+                    if not inp_settings['vector']:
+                        new_file_name = image_file.name[:image_file.name.find('.svg')] + '.' + inp_settings['format']
+                    else:
+                        new_file_name = image_file.name
+                else:
+                    new_file_name = file_name[:file_name.find(file_name.split('.')[-1])] + inp_settings['format']
         # если формат оставить исходным
         else:
             new_file_name = file_name
@@ -92,20 +102,19 @@ class ImageProcessing(APIView):
             # иначе сохраняем без изменений
             else:
                 if tag == 'zip':
-                    cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, file_name))
+                    os.makedirs(os.path.join(path, '/'.join(image_file.name.split('/')[:-1])), exist_ok=True)
+                    cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, new_file_name))
                 else:
                     cairosvg.svg2svg(file_obj=image_file, write_to=os.path.join(path, datetime_name_mark + file_name))
                 return image_file.name
         elif image_file.name.lower().endswith('.eps'):
-            if not inp_settings['vector']:
-                image = Image.open(image_file)
+            if tag == 'zip':
+                os.makedirs(os.path.join(path, '/'.join(image_file.name.split('/')[:-1])), exist_ok=True)
+                default_storage.save(os.path.join(path, image_file.name), image_file)
             else:
-                if tag == 'zip':
-                    default_storage.save(os.path.join(path, image_file.name), image_file)
-                else:
-                    # сохраняём файл из локального хранилища без изменений
-                    default_storage.save(os.path.join(path, datetime_name_mark + image_file.name), image_file)
-                return image_file.name
+                # сохраняём файл из локального хранилища без изменений
+                default_storage.save(os.path.join(path, datetime_name_mark + image_file.name), image_file)
+            return image_file.name
         else:
             image = Image.open(image_file)
 
@@ -129,6 +138,7 @@ class ImageProcessing(APIView):
             else:
                 image = image.resize((inp_settings['width'], inp_settings['height']))
         if tag == 'zip':
+            os.makedirs(os.path.join(path, '/'.join(new_file_name.split('/')[:-1])), exist_ok=True)
             image.save(os.path.join(path, new_file_name), quality=inp_settings['quality'],
                        format=inp_settings['format'].upper())
         elif tag == 'single_image':
@@ -153,16 +163,30 @@ class ImageProcessing(APIView):
                 path, 'w') as output_zipfile:
             # проверяем есть ли изображения в файле
             if [file.filename for file in zip_file.infolist() if
-                file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.svg'))]:
-                os.mkdir(os.path.join(settings.MEDIA_ROOT,
-                                      f'download\\output_zip_images\\{datetime_name_mark}'))  # создаём директорию для извлечения изображений
+                file.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.svg', '.eps'))]:
                 dir_path_to_save = os.path.join(settings.MEDIA_ROOT,
-                                                f'download\\output_zip_images\\{datetime_name_mark}')  # запоминаем путь по которому следует сохранять изображения
+                                                f'download/output_zip_images/{datetime_name_mark}')  # запоминаем путь по которому следует сохранять изображения
+                os.mkdir(dir_path_to_save)  # создаём директорию для извлечения изображений
                 for file_in_zip in zip_file.infolist():
-                    if file_in_zip.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.svg')):
+                    if file_in_zip.filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.svg', '.eps')):
                         with zip_file.open(file_in_zip.filename) as image_file:
                             self.image_process(image_file, inp_settings, dir_path_to_save, 'zip')
-                for output_image in os.scandir(dir_path_to_save):
-                    output_zipfile.write(output_image.path, output_image.name)
+                for output_file in os.scandir(dir_path_to_save):
+                    for img in self.extract_image_file(output_file):
+                        #print(img.find(datetime_name_mark), '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
+                        output_zipfile.write(img, '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
+                    #output_zipfile.write(output_image.path, f"{output_image.name}")
                 return True
         return False
+
+    def extract_image_file(self, file):
+        result = []
+        if file.is_dir():
+            for i in os.scandir(file):
+                if i.is_file():
+                    result.append(i.path)
+                else:
+                    result.extend(self.extract_image_file(i))
+        elif file.is_file():
+            result.append(file.path)
+        return result
