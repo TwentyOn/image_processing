@@ -17,7 +17,7 @@ from rest_framework.exceptions import APIException
 from rest_framework import status
 
 from PIL import Image
-from cairosvg import svg2png
+from cairosvg import svg2png, svg2svg
 
 import io
 
@@ -30,7 +30,6 @@ from .minio_bucket import bucket
 
 class ImageProcessing(APIView):
     def get(self, request):
-        print(request.data)
         return Response(request.method)
 
     def post(self, request):
@@ -48,27 +47,32 @@ class ImageProcessing(APIView):
                 output_zip_filename = f'output_{datetime_name_mark}.zip'
                 path = os.path.join(settings.MEDIA_ROOT, f'download\\{output_zip_filename}')
                 if self.zip_processing(file, serializer.validated_data, path, datetime_name_mark):
-                    """file_url = request.build_absolute_uri(
+                    file_url = request.build_absolute_uri(
                         os.path.join(settings.MEDIA_URL, f'download/{output_zip_filename}')) # стандартная ссылка в файловой системе сервера"""
                     # print(perf_counter() - start_time) # оценка времени выполнения
+
+                    """ Раскоментить если подключается S3-хранилище
                     bucket.upload_file('backet-test', f'zipfiles/{output_zip_filename}',
                                        os.path.join(settings.MEDIA_ROOT,
                                                     f"download/{output_zip_filename}"))  # отправка файла в S3
-                    os.remove(
-                        os.path.join(settings.MEDIA_ROOT, f"download/{output_zip_filename}"))  # удаляем файл с сервера
+                    os.remove(os.path.join(settings.MEDIA_ROOT, f"download/{output_zip_filename}"))  # удаляем файл с сервера
                     file_url = bucket.share_file_from_bucket('backet-test',
-                                                             f'zipfiles/{output_zip_filename}')  # ссылка на S3-хранилище
+                                                             f'zipfiles/{output_zip_filename}')  # ссылка на S3-хранилище"""
+
                     return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': output_zip_filename})
             # если изображение вызываем метод image_process
             elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.eps', '.svg', 'ai')):
                 path = os.path.join(settings.MEDIA_ROOT, 'download')
                 new_filename = f"{datetime_name_mark}{self.image_process(file, serializer.validated_data, path, 'single_image', datetime_name_mark)}"  # вызов функции обработки изображения
-                """file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL,
+                file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL,
                                                                    f'download/{new_filename}'))  # стандартная ссылка в файловой системе сервера"""
+
+                """ Раскоментить если подключается S3-хранилище
                 bucket.upload_file('backet-test', f'images/{new_filename}',
                                    os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # отправка файла в S3
-                os.remove(os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # удаление файла с сервера
-                file_url = bucket.share_file_from_bucket('backet-test', f'images/{new_filename}')
+                os.remove(os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # удаление файла с сервера (для S3-хранилища)
+                file_url = bucket.share_file_from_bucket('backet-test', f'images/{new_filename}') # получение ссылки на файл из S3-хранилища"""
+
                 # print(perf_counter() - start_time) # оценка времени выполнения
                 return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': new_filename})
                 # return FileResponse(output, filename=f'processed_{file.name}', content_type='image/WEBP')
@@ -86,8 +90,11 @@ class ImageProcessing(APIView):
 
         file_name = image_file.name
         # формирование имени файла c новым форматом
+        # если формат остаётся исходным
+        if inp_settings['format'] == 'original':
+            new_file_name = image_file.name
         # если меняем формат
-        if inp_settings['format']:
+        else: #inp_settings['format']:
             # если пришла одиночная картинка
             if tag == 'single_file':
                 # имя файла в формате "format"
@@ -105,13 +112,10 @@ class ImageProcessing(APIView):
                 # если растровый формат
                 else:
                     new_file_name = file_name[:file_name.find(file_name.split('.')[-1])] + inp_settings['format']
-        # если формат оставить исходным
-        else:
-            new_file_name = file_name
         # преобразование векторного изображения в растровое
-        if image_file.name.lower().endswith('.svg'):
+        if image_file.name.endswith('.svg'):
             # если параметр vector False конвертируем в формат для обработки библиотекой pillow
-            if not inp_settings['vector']:
+            if not inp_settings['vector'] and inp_settings['format'] != 'original':
                 png_data = svg2png(file_obj=image_file)
                 png_buffer = io.BytesIO(png_data)
                 image = Image.open(png_buffer)
@@ -135,10 +139,10 @@ class ImageProcessing(APIView):
             image = Image.open(image_file)
 
         # pillow не имеет формата jpg, меняем строку на jpeg
-        if inp_settings['format'].lower() == 'jpg':
-            inp_settings['format'] = 'jpeg'
+        if new_file_name.split('.')[-1].lower() == 'jpg':
+            new_file_name = new_file_name[:new_file_name.find('jpg')] + 'jpeg'
         # jpeg не поддерживает RGBA режим
-        if image.mode == 'RGBA' and inp_settings['format'] == 'jpeg':
+        if image.mode == 'RGBA' and new_file_name.split('.')[-1].lower() == 'jpeg':
             image = image.convert('RGB')
 
         if not inp_settings['resolution']:  # если False то меняем разрешение
@@ -156,10 +160,10 @@ class ImageProcessing(APIView):
         if tag == 'zip':
             os.makedirs(os.path.join(path, '/'.join(new_file_name.split('/')[:-1])), exist_ok=True)
             image.save(os.path.join(path, new_file_name), quality=inp_settings['quality'],
-                       format=inp_settings['format'].upper())
+                        format=new_file_name.split('.')[-1])
         elif tag == 'single_image':
             image.save(os.path.join(path, datetime_name_mark + new_file_name), quality=inp_settings['quality'],
-                       format=inp_settings['format'].upper())
+                       format=new_file_name.split('.')[-1])
         image.close()
         # image = Image.open(os.path.join(settings.MEDIA_ROOT, f'download\\{new_file_name}'))
         return f'{new_file_name}'
@@ -193,7 +197,7 @@ class ImageProcessing(APIView):
                         # print(img.find(datetime_name_mark), '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
                         output_zipfile.write(img, '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
                     # output_zipfile.write(output_image.path, f"{output_image.name}")
-                self.clear_and_del_dir(dir_path_to_save)
+                #self.clear_and_del_dir(dir_path_to_save) очистка директории output_zip_images (для S3-хранилища)
                 return True
         return False
 
