@@ -25,8 +25,7 @@ from .serializers import InputImage
 from .minio_bucket import bucket
 
 
-def index(request):
-    return render(request, 'index.html')
+
 
 
 class ImageProcessing(APIView):
