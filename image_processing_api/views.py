@@ -22,21 +22,7 @@ from string import punctuation
 
 from .serializers import InputImage
 
-
 from .minio_storage import storage
-
-
-class GetImage(APIView):
-    def get(self, request, filename):
-        """
-        Обработка GET-запросов для скачивания файлов
-        :param request: стандртный объект request
-        :param filename: имя файла
-        :return: объект FileResponse с файлом filename
-        """
-        response = FileResponse(open(os.path.join(settings.MEDIA_ROOT, f'download/{filename}'), 'rb'))
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
 
 
 class ImageProcessing(APIView):
@@ -58,11 +44,12 @@ class ImageProcessing(APIView):
                     # print(perf_counter() - start_time) # оценка времени выполнения
 
                     storage.upload_file('backet-test', f'zipfiles/{output_zip_filename}',
-                                       os.path.join(settings.MEDIA_ROOT,
-                                                    f"download/{output_zip_filename}"))  # отправка файла в S3
-                    os.remove(os.path.join(settings.MEDIA_ROOT, f"download/{output_zip_filename}"))  # удаляем файл с сервера
+                                        os.path.join(settings.MEDIA_ROOT,
+                                                     f"download/{output_zip_filename}"))  # отправка файла в S3
+                    os.remove(
+                        os.path.join(settings.MEDIA_ROOT, f"download/{output_zip_filename}"))  # удаляем файл с сервера
                     file_url = storage.share_file_from_bucket('backet-test',
-                                                             f'zipfiles/{output_zip_filename}')  # ссылка на S3-хранилище"""
+                                                              f'zipfiles/{output_zip_filename}')  # ссылка на S3-хранилище"""
 
                     return Response(
                         {'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': output_zip_filename})
@@ -72,9 +59,12 @@ class ImageProcessing(APIView):
                 new_filename = f"{datetime_name_mark}{self.image_process(file, serializer.validated_data, path, 'single_image', datetime_name_mark)}"  # вызов функции обработки изображения
 
                 storage.upload_file('backet-test', f'images/{new_filename}',
-                                   os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # отправка файла в S3
-                os.remove(os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # удаление файла с сервера (для S3-хранилища)
-                file_url = storage.share_file_from_bucket('backet-test', f'images/{new_filename}') # получение ссылки на файл из S3-хранилища"""
+                                    os.path.join(settings.MEDIA_ROOT,
+                                                 f'download/{new_filename}'))  # отправка файла в S3
+                os.remove(os.path.join(settings.MEDIA_ROOT,
+                                       f'download/{new_filename}'))  # удаление файла с сервера (для S3-хранилища)
+                file_url = storage.share_file_from_bucket('backet-test',
+                                                          f'images/{new_filename}')  # получение ссылки на файл из S3-хранилища"""
 
                 # print(perf_counter() - start_time) # оценка времени выполнения
                 return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': new_filename})
@@ -202,7 +192,7 @@ class ImageProcessing(APIView):
                         # print(img.find(datetime_name_mark), '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
                         output_zipfile.write(img, '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
                     # output_zipfile.write(output_image.path, f"{output_image.name}")
-                self.clear_and_del_dir(dir_path_to_save) # очистка директории output_zip_images (для S3-хранилища)
+                self.clear_and_del_dir(dir_path_to_save)  # очистка директории output_zip_images (для S3-хранилища)
                 return True
         return False
 
