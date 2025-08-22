@@ -3,12 +3,12 @@ from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration, Filter
 
 from datetime import timedelta
 
-DEFAULT_ENDPOINT_URL = 'localhost:9000'  # адрес-порт по-умолчанию
-DEFAULT_ACCESS_KEY = 'minioadmin'  # логин minio по-умолчанию для тестовой среды
-DEFAULT_SECRET_KEY = 'minioadmin'  # пароль minio по-умолчанию для тестовой среды
+DEFAULT_ENDPOINT_URL = 'localhost:9000'  # домен:порт (по-умолчанию для тестовой среды - localhost:9000)
+DEFAULT_ACCESS_KEY = 'minioadmin'  # логин minio (по-умолчанию для тестовой среды - minioadmin)
+DEFAULT_SECRET_KEY = 'minioadmin'  # пароль minio (по-умолчанию для тестовой среды - minioadmin)
 
 
-class MyBucket:
+class MyStorage:
     def __init__(self, endpoint: str, access_key: str, secret_key: str, secure: bool = False):
         self.client = Minio(
             endpoint=endpoint,
@@ -21,7 +21,7 @@ class MyBucket:
                                   Rule(rule_id='cleanup_dir_images', status='Enabled', expiration=Expiration(days=1),
                                        rule_filter=Filter(prefix='images/'))])
         self.client.set_bucket_lifecycle('backet-test', config)
-        print('Подключение к bucket успешно')
+        print('Подключение к хранилищу успешно')
 
     def create_bucket(self, bucket_name):
         self.client.make_bucket(bucket_name)
@@ -50,4 +50,4 @@ class MyBucket:
         return self.client.presigned_get_object(backet_name, file_name, expire)
 
 
-bucket = MyBucket(DEFAULT_ENDPOINT_URL, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)
+storage = MyStorage(DEFAULT_ENDPOINT_URL, DEFAULT_ACCESS_KEY, DEFAULT_SECRET_KEY)

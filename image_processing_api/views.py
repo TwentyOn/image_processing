@@ -23,7 +23,7 @@ from string import punctuation
 from .serializers import InputImage
 
 
-# from .minio_bucket import bucket
+from .minio_storage import storage
 
 
 class GetImage(APIView):
@@ -55,18 +55,13 @@ class ImageProcessing(APIView):
                 output_zip_filename = f'output_{datetime_name_mark}.zip'
                 path = os.path.join(settings.MEDIA_ROOT, f'download\\{output_zip_filename}')
                 if self.zip_processing(file, serializer.validated_data, path, datetime_name_mark):
-                    """file_url = request.build_absolute_uri(
-                        os.path.join(settings.MEDIA_URL,
-                                     f'download/{output_zip_filename}'))  # стандартная ссылка в файловой системе сервера"""
-                    file_url = request.build_absolute_uri(f'download/{output_zip_filename}')
                     # print(perf_counter() - start_time) # оценка времени выполнения
 
-                    """ Раскоментить если подключается S3-хранилище
-                    bucket.upload_file('backet-test', f'zipfiles/{output_zip_filename}',
+                    storage.upload_file('backet-test', f'zipfiles/{output_zip_filename}',
                                        os.path.join(settings.MEDIA_ROOT,
                                                     f"download/{output_zip_filename}"))  # отправка файла в S3
                     os.remove(os.path.join(settings.MEDIA_ROOT, f"download/{output_zip_filename}"))  # удаляем файл с сервера
-                    file_url = bucket.share_file_from_bucket('backet-test',
+                    file_url = storage.share_file_from_bucket('backet-test',
                                                              f'zipfiles/{output_zip_filename}')  # ссылка на S3-хранилище"""
 
                     return Response(
@@ -75,15 +70,11 @@ class ImageProcessing(APIView):
             elif file.name.lower().endswith(('.png', '.webp', '.jpg', '.jpeg', '.eps', '.svg', 'ai')):
                 path = os.path.join(settings.MEDIA_ROOT, 'download')
                 new_filename = f"{datetime_name_mark}{self.image_process(file, serializer.validated_data, path, 'single_image', datetime_name_mark)}"  # вызов функции обработки изображения
-                """file_url = request.build_absolute_uri(os.path.join(settings.MEDIA_URL,
-                                                                   f'download/{new_filename}'))  # стандартная ссылка в файловой системе сервера"""
-                file_url = request.build_absolute_uri(f'download/{new_filename}')
 
-                """ Раскоментить если подключается S3-хранилище
-                bucket.upload_file('backet-test', f'images/{new_filename}',
+                storage.upload_file('backet-test', f'images/{new_filename}',
                                    os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # отправка файла в S3
                 os.remove(os.path.join(settings.MEDIA_ROOT, f'download/{new_filename}'))  # удаление файла с сервера (для S3-хранилища)
-                file_url = bucket.share_file_from_bucket('backet-test', f'images/{new_filename}') # получение ссылки на файл из S3-хранилища"""
+                file_url = storage.share_file_from_bucket('backet-test', f'images/{new_filename}') # получение ссылки на файл из S3-хранилища"""
 
                 # print(perf_counter() - start_time) # оценка времени выполнения
                 return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': new_filename})
@@ -171,9 +162,7 @@ class ImageProcessing(APIView):
                 image = image.resize((inp_settings['width'], inp_settings['height']))
         if tag == 'zip':
             new_file_name = self.encode_broken_name(new_file_name)
-            print(new_file_name)
             new_file_name = self.get_correct_name(new_file_name)
-            print(new_file_name)
             os.makedirs(os.path.join(path, '/'.join(new_file_name.split('/')[:-1])), exist_ok=True)
             image.save(os.path.join(path, new_file_name), quality=inp_settings['quality'],
                        format=new_file_name.split('.')[-1])
@@ -213,7 +202,7 @@ class ImageProcessing(APIView):
                         # print(img.find(datetime_name_mark), '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
                         output_zipfile.write(img, '/'.join(img[img.find(datetime_name_mark):].split('\\')[1:]))
                     # output_zipfile.write(output_image.path, f"{output_image.name}")
-                # self.clear_and_del_dir(dir_path_to_save) очистка директории output_zip_images (для S3-хранилища)
+                self.clear_and_del_dir(dir_path_to_save) # очистка директории output_zip_images (для S3-хранилища)
                 return True
         return False
 
@@ -255,12 +244,22 @@ class ImageProcessing(APIView):
         os.rmdir(path)
 
     def encode_broken_name(self, name):
+        """
+        Функция для корректного отображения кирилицы в названии zip-файлов
+        :param name: название zip-файла
+        :return: строка
+        """
         try:
             return bytes(name, 'CP437').decode('cp866')
         except:
             return name
 
     def get_correct_name(self, string):
+        """
+        Функция удаляет символы недопустимые в названии папок
+        :param string:
+        :return:
+        """
         new_string = ''
         for i in string:
             if i in punctuation and i not in ('/', '\\', '.'):
