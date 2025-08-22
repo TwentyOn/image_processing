@@ -86,11 +86,7 @@ class ImageProcessing(APIView):
                 file_url = bucket.share_file_from_bucket('backet-test', f'images/{new_filename}') # получение ссылки на файл из S3-хранилища"""
 
                 # print(perf_counter() - start_time) # оценка времени выполнения
-                response = Response(
-                    {'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': new_filename})
-                response['Content-Disposition'] = f'attachment; filename="{new_filename}"'
-                # return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': new_filename})
-                return response
+                return Response({'status_code': status.HTTP_200_OK, 'file_url': file_url, 'file_name': new_filename})
                 # return FileResponse(output, filename=f'processed_{file.name}', content_type='image/WEBP')
         return Response({'status_code': status.HTTP_400_BAD_REQUEST, 'message': 'Неверные параметры запроса'})
 
