@@ -4,6 +4,7 @@ from zipfile import ZipFile
 from datetime import datetime, date
 from time import perf_counter
 
+
 import cairosvg
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -40,6 +41,9 @@ class GetImage(APIView):
 
 
 class ImageProcessing(APIView):
+    def get(self, request):
+        return Response(request.method)
+
     def post(self, request):
         datetime_name_mark = f'{date.today()}-{datetime.today().hour}-{datetime.today().minute}-{datetime.today().second}-{datetime.today().microsecond}'
         serializer = InputImage(data=request.data)
@@ -123,7 +127,7 @@ class ImageProcessing(APIView):
                     new_file_name = image_file.name
                 # если растровый формат
                 else:
-                    new_file_name = file_name[:file_name.find(file_name.split('.')[-1])] + inp_settings['format']
+                    new_file_name = file_name[:file_name.find('.' + file_name.split('.')[-1])] + f".{inp_settings['format']}"
         # преобразование векторного изображения в растровое
         if image_file.name.endswith('.svg'):
             # если параметр vector False конвертируем в формат для обработки библиотекой pillow
@@ -152,7 +156,7 @@ class ImageProcessing(APIView):
 
         # pillow не имеет формата jpg, меняем строку на jpeg
         if new_file_name.split('.')[-1].lower() == 'jpg':
-            new_file_name = new_file_name[:new_file_name.find('jpg')] + 'jpeg'
+            new_file_name = new_file_name[:new_file_name.find('.jpg')] + '.jpeg'
         # jpeg не поддерживает RGBA режим
         if image.mode == 'RGBA' and new_file_name.split('.')[-1].lower() == 'jpeg':
             image = image.convert('RGB')
@@ -171,9 +175,7 @@ class ImageProcessing(APIView):
                 image = image.resize((inp_settings['width'], inp_settings['height']))
         if tag == 'zip':
             new_file_name = self.encode_broken_name(new_file_name)
-            print(new_file_name)
             new_file_name = self.get_correct_name(new_file_name)
-            print(new_file_name)
             os.makedirs(os.path.join(path, '/'.join(new_file_name.split('/')[:-1])), exist_ok=True)
             image.save(os.path.join(path, new_file_name), quality=inp_settings['quality'],
                        format=new_file_name.split('.')[-1])
