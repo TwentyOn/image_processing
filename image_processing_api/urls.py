@@ -1,6 +1,6 @@
 from django.urls import path
-from .views import ImageProcessing
+from .views import NewRequest
 
 urlpatterns = [
-    path('', ImageProcessing.as_view())
+    path('', NewRequest.as_view())
 ]

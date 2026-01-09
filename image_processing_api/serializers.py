@@ -1,25 +1,23 @@
+import os
+
 from rest_framework import serializers
+from django.core.validators import FileExtensionValidator
+from dotenv import load_dotenv
 
-"""
-class Image(serializers.Serializer):
-    format = serializers.CharField(max_length=10)
-    quality = serializers.IntegerField()
+load_dotenv()
+
+ALLOWED_EXTENSIONS = os.getenv('ALLOWED_EXTENSIONS').split(',')
+
+class Request(serializers.Serializer):
+    file = serializers.FileField(
+        validators=[FileExtensionValidator(ALLOWED_EXTENSIONS)],
+        error_messages={'invalid': 'Неверный формат файла'}
+    )
+    format = serializers.CharField()
+    quality = serializers.CharField()
     resolution = serializers.BooleanField()
     proportion = serializers.BooleanField()
     toggle_switch = serializers.BooleanField()
-    high = serializers.IntegerField()
+    height = serializers.IntegerField()
     width = serializers.IntegerField()
-    file_format = serializers.CharField(max_length=10) # формат прикрепленного файла
-                                                       # в потенциале нужно определять средствами python
-"""
-
-
-class InputImage(serializers.Serializer):
-    format = serializers.CharField(max_length=25)
-    quality = serializers.IntegerField()
-    resolution = serializers.BooleanField()
-    proportion = serializers.BooleanField()
     vector = serializers.BooleanField()
-    toggle_switch = serializers.BooleanField()
-    height = serializers.IntegerField(required=False)
-    width = serializers.IntegerField(required=False)
