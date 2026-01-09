@@ -207,7 +207,7 @@ class FileProcessor:
         Обработка zip-архива
         :return:
         """
-        datatime_mark = datetime.now().strftime('%Y%m%d_%H-%M-%S-%f')
+        datatime_mark = datetime.now().strftime('%Y%m%d_%H%M%S-%f')
         output_zip_name = f'{datatime_mark}_{self.file.name.replace(' ', '_')}'
         output_zip_path = os.path.join(RESULTS_DIR, output_zip_name)
 
